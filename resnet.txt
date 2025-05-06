@@ -1,0 +1,80 @@
+class NewNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.blck1 = nn.Sequential(
+            nn.Conv2d(3, 64, 11, 4, 4),
+            nn.ReLU(),
+            nn.BatchNorm2d(64),
+            nn.MaxPool2d(3, 2, 1))  # 32
+
+        self.blck2 = nn.Sequential(
+            nn.Conv2d(64, 128, 7, 2, 3),
+            nn.ReLU(),
+            nn.BatchNorm2d(128),
+            nn.MaxPool2d(3, 2, 1))  # 8
+        
+        self.branch1 = nn.Sequential(
+            nn.Conv2d(256, 64, 1, 1, 0), 
+            nn.ReLU(),
+            nn.BatchNorm2d(64))
+        self.branch2 = nn.Sequential(
+            nn.Conv2d(256, 64, 1, 1, 0),
+            nn.Conv2d(64, 182, 3, 1, 1), 
+            nn.ReLU(),
+            nn.BatchNorm2d(128))
+        self.branch3 = nn.Sequential(
+            nn.Conv2d(256, 16, 1, 1, 0),
+            nn.Conv2d(16, 64, 5, 1, 2), 
+            nn.ReLU(),
+            nn.BatchNorm2d(64))     # 8
+
+        self.blck3 = nn.Sequential(
+            nn.Conv2d(256, 256, 3, 1, 1), 
+            nn.ReLU(),
+            nn.BatchNorm2d(256),
+
+            nn.Conv2d(256, 256, 3, 1, 1), 
+            nn.ReLU(),
+            nn.BatchNorm2d(512),
+            nn.MaxPool2d(3, 2, 1))  # 4
+        
+        self.fcll = nn.Sequential(
+            nn.AdaptiveAvgPool2d(1),
+            nn.Flatten(),
+            nn.Dropout(0.25),
+            nn.Linear(512, 256),
+            nn.Dropout(0.25),
+            nn.Linear(256, 91)
+        )
+
+    def forward(self, x):
+        x = self.blck1(x)
+
+        x = self.blck2(x)
+
+        x = torch.cat([self.branch1(x), self.branch2(x), self.branch3(x)], 1)
+        x = nn.MaxPool2d(3, 2 ,1)(x)
+
+        x = self.blck3(x)
+        
+        x = self.fcll(x)
+        return x
+    
+    def _make_layer(self, rep, in_channels, out_channels, stride):
+        layer = []
+        layer.append(nn.Sequential(
+            nn.Conv2d(in_channels, out_channels, 3, stride, 1),
+            nn.BatchNorm2d(out_channels),
+            nn.ReLU(),
+            nn.Conv2d(out_channels, out_channels, 3, 1, 1),
+            nn.BatchNorm2d(out_channels)))
+        
+        for _ in range(1, rep):
+            layer.append(nn.Sequential(
+                nn.Conv2d(in_channels, out_channels, 3, stride, 1),
+                nn.BatchNorm2d(out_channels),
+                nn.ReLU(),
+                nn.Conv2d(out_channels, out_channels, 3, 1, 1),
+                nn.BatchNorm2d(out_channels)))
+            
+        return nn.Sequential(*layer)
